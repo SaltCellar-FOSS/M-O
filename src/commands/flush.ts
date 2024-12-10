@@ -22,6 +22,6 @@ export default {
 		// execute function, as that does everything that we want anyway.
 		await readyEvent.execute(interaction.client);
 
-		await interaction.editReply({ message: 'Done!' });
+		await interaction.editReply('Done!');
 	},
 } satisfies Command;
