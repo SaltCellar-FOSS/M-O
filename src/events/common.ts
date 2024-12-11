@@ -6,7 +6,7 @@ import logger from '../logger.js';
 import type { MessageItem } from '../model/messageItem.js';
 
 export const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1_000;
-export const FIVE_MINUTES = 5 * 60 * 1_000;
+export const TEN_MINUTES = 10 * 60 * 1_000;
 export const FIVE_SECONDS = 5 * 1_000;
 
 const expireMessage = async (message: Message) =>
@@ -62,6 +62,7 @@ export const expireMessages = async (client: Client): Promise<void> => {
 			.bulkDelete(toDelete)
 			.then((messages) => logger.info(`Bulk deleted ${messages.size} messages.`))
 			.catch((error) => logger.error(error));
+		await setTimeout(FIVE_SECONDS);
 	}
 
 	for (const msg of undeletedMessages) global.messageQueue.addToQueue(msg);

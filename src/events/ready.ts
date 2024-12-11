@@ -4,7 +4,7 @@ import type { Client, Message, TextChannel, Collection } from 'discord.js';
 import { Events } from 'discord.js';
 import logger from '../logger.js';
 import { MessageItem } from '../model/messageItem.js';
-import { FIVE_MINUTES, TWENTY_FOUR_HOURS, expireMessages } from './common.js';
+import { TEN_MINUTES, TWENTY_FOUR_HOURS, expireMessages } from './common.js';
 import type { Event } from './index.js';
 
 export default {
@@ -57,6 +57,6 @@ export default {
 		// set the loop up.
 		setInterval(async () => {
 			await expireMessages(client);
-		}, FIVE_MINUTES);
+		}, TEN_MINUTES);
 	},
 } satisfies Event<Events.ClientReady>;
