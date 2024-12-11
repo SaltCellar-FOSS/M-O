@@ -4,7 +4,7 @@ import type { Message, Client, TextChannel } from 'discord.js';
 import logger from '../logger.js';
 import type { MessageItem } from '../model/messageItem.js';
 
-export const TWENTY_FOUR_HOURS = 60 * 1_000; // 24 * 60 * 60 * 1_000;
+export const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1_000;
 
 const expireMessage = async (message: Message) =>
 	message
