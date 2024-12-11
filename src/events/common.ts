@@ -1,21 +1,10 @@
-import { Message } from 'discord.js';
-
-import { setTimeout } from 'timers/promises';
+import process from 'node:process';
+import { Message, Client, TextChannel } from 'discord.js';
 import logger from '../logger.js';
 
 export const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-export const expireMessageAfter = async (message: Message, millis: number): Promise<void> => {
-	if (message.pinned) {
-		return setTimeout(0);
-	}
-
-	await setTimeout(millis);
-	const refreshedMessage = await message.fetch(true);
-	return expireMessage(refreshedMessage);
-};
-
-export const expireMessage = (message: Message<boolean>) =>
+export const expireMessage = (message: Message) =>
 	message
 		.delete()
 		.then((deletedMsg) => {
@@ -25,3 +14,19 @@ export const expireMessage = (message: Message<boolean>) =>
 			logger.error(`Error expiring ${message.id}:`);
 			logger.error(err);
 		});
+
+		
+export const expireMessages = async (client: Client): Promise<void> => {
+	let bulkDeletable: Array<Message> = [];
+	for (const message of messageQueue) {
+		if (message.shouldDelete()) {
+			bulkDeletable.push(message.message);
+		}
+	}
+	
+	let channel = await client.channels.fetch(process.env.CHANNEL_ID!) as TextChannel;
+	
+	channel.bulkDelete(bulkDeletable)
+		.then((messages) => logger.info(`Bulk deleted ${messages.size} messages.`))
+		.catch((err) => logger.error(err));
+};

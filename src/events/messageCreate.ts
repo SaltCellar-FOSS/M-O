@@ -2,8 +2,9 @@ import process from 'node:process';
 import type { Message } from 'discord.js';
 import { Events } from 'discord.js';
 import logger from '../logger.js';
-import { expireMessageAfter, TWENTY_FOUR_HOURS } from './common.js';
+import { TWENTY_FOUR_HOURS } from './common.js';
 import type { Event } from './index.js';
+import { MessageItem } from '../model/messageItem.js';
 
 export default {
 	name: Events.MessageCreate,
@@ -15,6 +16,6 @@ export default {
 		}
 
 		logger.info(`Message received: ${message.id}`);
-		await expireMessageAfter(message, TWENTY_FOUR_HOURS);
+		messageQueue.push(new MessageItem(message, TWENTY_FOUR_HOURS));
 	},
 } satisfies Event<Events.MessageCreate>;

@@ -5,6 +5,7 @@ import type { Event } from './index.js';
 import { TWENTY_FOUR_HOURS } from './common.js';
 import { expireMessageAfter } from './common.js';
 import logger from '../logger.js';
+import { MessageItem } from '../model/messageItem.js';
 
 export default {
 	name: Events.ClientReady,
@@ -68,7 +69,7 @@ export default {
 					timeout = expectedExpireTimestamp - now;
 				}
 
-				await expireMessageAfter(message, timeout);
+				messageQueue.push(new MessageItem(message, timeout));
 			}
 
 			// Update our message pointer to be the last message on the page of messages
@@ -81,6 +82,6 @@ export default {
 			.catch((err) => logger.error(err));
 
 		const scheduledExpiration = Date.now() - (latestMessage.createdTimestamp + TWENTY_FOUR_HOURS);
-		expireMessageAfter(latestMessage, Math.max(scheduledExpiration, 0));
+		messageQueue.push(new MessageItem(latestMessage, Math.max(scheduledExpiration, 0)));
 	},
 } satisfies Event<Events.ClientReady>;
