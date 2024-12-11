@@ -4,7 +4,7 @@ import type { Client, Message, TextChannel, Collection } from 'discord.js';
 import { Events } from 'discord.js';
 import logger from '../logger.js';
 import { MessageItem } from '../model/messageItem.js';
-import { TWENTY_FOUR_HOURS, expireMessages } from './common.js';
+import { FIVE_MINUTES, TWENTY_FOUR_HOURS, expireMessages } from './common.js';
 import type { Event } from './index.js';
 
 export default {
@@ -29,10 +29,6 @@ export default {
 			return;
 		}
 
-		// To avoid rate limiting, we artificially insert a 5 second delay between
-		// deletions.
-		const delayIfExpired = 5_000;
-
 		let currentMsgPointer: Message<boolean> | null | undefined = latestMessage;
 		while (currentMsgPointer) {
 			// Get the 100 messages before the pointer
@@ -41,19 +37,11 @@ export default {
 				before: currentMsgPointer.id,
 			});
 
-			// Check each to see if they're expired.
 			for (const message of messagePage.values()) {
-				const now = Date.now();
-
-				let timeout = delayIfExpired;
-
-				// If we've found a message that should expire in the future, create an expiration for it.
-				if (message.createdTimestamp + TWENTY_FOUR_HOURS > now) {
-					timeout = TWENTY_FOUR_HOURS;
-				}
+				// expireMessages will handle whether to delete in bulk, or delete one by one with 5 second delays in between.
 
 				logger.info(`Message queued: ${message.id}`);
-				globalThis.messageQueue.addToQueue(new MessageItem(message, timeout, message.createdAt));
+				globalThis.messageQueue.addToQueue(new MessageItem(message, TWENTY_FOUR_HOURS, message.createdAt));
 			}
 
 			// Update our message pointer to be the last message on the page of messages
@@ -63,10 +51,12 @@ export default {
 		logger.info(`Message queued: ${latestMessage.id}`);
 		globalThis.messageQueue.addToQueue(new MessageItem(latestMessage, TWENTY_FOUR_HOURS, latestMessage.createdAt));
 
+		// run it once and handle the backlog.
 		await expireMessages(client);
 
+		// set the loop up.
 		setInterval(async () => {
 			await expireMessages(client);
-		}, 10 * 1_000);
+		}, FIVE_MINUTES);
 	},
 } satisfies Event<Events.ClientReady>;
