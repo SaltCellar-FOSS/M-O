@@ -22,6 +22,7 @@ const expireMessage = async (message: Message) =>
 
 export const expireMessages = async (client: Client): Promise<void> => {
 	const messageQueueSnapshot: MessageItem[] = globalThis.messageQueue.snapshot();
+	logger.info(`processing queue of length ${messageQueueSnapshot.length}`);
 	globalThis.messageQueue.clearQueue();
 	const bulkDeletable: Message[] = [];
 	const undeletedMessages: MessageItem[] = [];
@@ -34,8 +35,10 @@ export const expireMessages = async (client: Client): Promise<void> => {
 		try {
 			if (await message.shouldDelete()) {
 				if (message.message.bulkDeletable) {
+					logger.info(`queueing for bulk deletion ${message.messageId}`);
 					bulkDeletable.push(message.message);
 				} else {
+					logger.info(`individual deletion of ${message.messageId}`);
 					await expireMessage(message.message);
 					// if we're deleting one by one, wait so that we don't get rate limited.
 					await setTimeout(FIVE_SECONDS);
@@ -49,12 +52,17 @@ export const expireMessages = async (client: Client): Promise<void> => {
 		}
 	}
 
+	logger.info(`moving to bulk delete ${bulkDeletable.length} messages`);
+
 	const channel = (await client.channels.fetch(process.env.CHANNEL_ID!)) as TextChannel;
 
-	channel
-		.bulkDelete(bulkDeletable)
-		.then((messages) => logger.info(`Bulk deleted ${messages.size} messages.`))
-		.catch((error) => logger.error(error));
+	while (bulkDeletable.length > 0) {
+		const toDelete = bulkDeletable.splice(0, 100);
+		channel
+			.bulkDelete(toDelete)
+			.then((messages) => logger.info(`Bulk deleted ${messages.size} messages.`))
+			.catch((error) => logger.error(error));
+	}
 
 	for (const msg of undeletedMessages) global.messageQueue.addToQueue(msg);
 };
