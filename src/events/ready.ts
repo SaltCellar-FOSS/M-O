@@ -1,10 +1,11 @@
 import process from 'node:process';
+import { setInterval } from 'node:timers';
 import type { Client, Message, TextChannel, Collection } from 'discord.js';
 import { Events } from 'discord.js';
-import type { Event } from './index.js';
-import { TWENTY_FOUR_HOURS } from './common.js';
-import { expireMessageAfter } from './common.js';
 import logger from '../logger.js';
+import { MessageItem } from '../model/messageItem.js';
+import { TEN_MINUTES, TWENTY_FOUR_HOURS, expireMessages } from './common.js';
+import type { Event } from './index.js';
 
 export default {
 	name: Events.ClientReady,
@@ -14,8 +15,6 @@ export default {
 		if (channel === null) {
 			return;
 		}
-
-		const bulkDeletable: Message<boolean>[] = [];
 
 		// Discord doesn't let us fetch all of the messages at once: it paginates it.
 		// Since Discord.js doesn't handle that pagination natively, we have to build
@@ -30,57 +29,34 @@ export default {
 			return;
 		}
 
-		// To avoid rate limiting, we artificially insert a 5 second delay between
-		// deletions.
-		const delayIfExpired = 5000;
-
 		let currentMsgPointer: Message<boolean> | null | undefined = latestMessage;
 		while (currentMsgPointer) {
 			// Get the 100 messages before the pointer
-			let messagePage: Collection<string, Message<true>> = await channel.messages.fetch({
+			const messagePage: Collection<string, Message<true>> = await channel.messages.fetch({
 				limit: 100,
 				before: currentMsgPointer.id,
 			});
 
-			// Check each to see if they're expired.
 			for (const message of messagePage.values()) {
-				const expectedExpireTimestamp = message.createdTimestamp + TWENTY_FOUR_HOURS;
-				const now = Date.now();
-				if (message.pinned) {
-					continue;
-				} else if (message.bulkDeletable) {
-					// Prefer to minimize calls to the Discord API to avoid
-					// rate limiting. Instead, call bulk delete once with
-					// eligible messages.
+				// expireMessages will handle whether to delete in bulk, or delete one by one with 5 second delays in between.
 
-					// Only delete expirable messages, though!
-					if (expectedExpireTimestamp <= now) {
-						bulkDeletable.push(message);
-					}
-
-					continue;
-				}
-
-				let timeout = delayIfExpired;
-
-				// If we've found a message that should expire in the future, create an expiration for it.
-				if (expectedExpireTimestamp > now) {
-					timeout = expectedExpireTimestamp - now;
-				}
-
-				await expireMessageAfter(message, timeout);
+				logger.info(`Message queued: ${message.id}`);
+				globalThis.messageQueue.addToQueue(new MessageItem(message, TWENTY_FOUR_HOURS, message.createdAt));
 			}
 
 			// Update our message pointer to be the last message on the page of messages
-			currentMsgPointer = 0 < messagePage.size ? messagePage.at(messagePage.size - 1) : null;
+			currentMsgPointer = messagePage.size > 0 ? messagePage.at(messagePage.size - 1) : null;
 		}
 
-		await channel
-			.bulkDelete(bulkDeletable)
-			.then((messages) => logger.info(`Bulk deleted ${messages.size} messages.`))
-			.catch((err) => logger.error(err));
+		logger.info(`Message queued: ${latestMessage.id}`);
+		globalThis.messageQueue.addToQueue(new MessageItem(latestMessage, TWENTY_FOUR_HOURS, latestMessage.createdAt));
 
-		const scheduledExpiration = Date.now() - (latestMessage.createdTimestamp + TWENTY_FOUR_HOURS);
-		expireMessageAfter(latestMessage, Math.max(scheduledExpiration, 0));
+		// run it once and handle the backlog.
+		await expireMessages(client);
+
+		// set the loop up.
+		setInterval(async () => {
+			await expireMessages(client);
+		}, TEN_MINUTES);
 	},
 } satisfies Event<Events.ClientReady>;
